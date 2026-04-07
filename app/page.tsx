@@ -40,6 +40,10 @@ FORMATOS:
 
 LOGO: El logo de Matilde usa letras espaciadas en dorado/negro con "Brunch" en cursiva script debajo. Simúlalo con tipografía cuando lo necesites.
 
+=== IMÁGENES ===
+Cuando el usuario suba una foto, úsala en el diseño como fondo o elemento principal. Referencia la imagen con la etiqueta especial: {{USER_IMAGE}}
+Cuando quieras incluir una imagen generada por IA, describe lo que quieres con la etiqueta: {{GENERATE_IMAGE: descripción detallada en inglés, estilo retro vintage glamoroso, colores pasteles, food photography}}
+
 === TU COMPORTAMIENTO ===
 
 Cuando el usuario pida una pieza de diseño:
@@ -49,6 +53,8 @@ Cuando el usuario pida una pieza de diseño:
 4. Usa @import de Google Fonts al inicio del <style>
 5. El diseño debe ser pixel-perfect para el formato solicitado
 6. Siempre incluye el logo/nombre "Matilde Brunch" en la pieza
+7. Si el usuario subió una foto, úsala como elemento central del diseño con {{USER_IMAGE}}
+8. Si quieres generar una imagen de fondo o decorativa, usa {{GENERATE_IMAGE: prompt en inglés}}
 
 TIPOS DE PIEZAS QUE PUEDES CREAR:
 - Anuncio de nuevo plato
@@ -75,8 +81,57 @@ const EXAMPLES = [
   "Post menú del día lunch time",
 ];
 
+async function generateGeminiImage(prompt: string): Promise<string | null> {
+  try {
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: { sampleCount: 1, aspectRatio: "1:1" },
+        }),
+      }
+    );
+    const data = await res.json();
+    const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
+    if (b64) return `data:image/png;base64,${b64}`;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function processHtmlWithImages(html: string, userImage: string | null): Promise<string> {
+  // Replace user image placeholder
+  if (userImage) {
+    html = html.replace(/\{\{USER_IMAGE\}\}/g, userImage);
+  }
+
+  // Find and replace all GENERATE_IMAGE tags
+  const imgRegex = /\{\{GENERATE_IMAGE:\s*(.*?)\}\}/g;
+  const matches = [...html.matchAll(imgRegex)];
+
+  for (const match of matches) {
+    const prompt = match[1];
+    const imageUrl = await generateGeminiImage(
+      `${prompt}, glamorous retro vintage style 50s 60s, pastel colors, high quality food photography, elegant`
+    );
+    if (imageUrl) {
+      html = html.replace(match[0], imageUrl);
+    } else {
+      // fallback to gradient if image generation fails
+      html = html.replace(match[0], "");
+    }
+  }
+
+  return html;
+}
+
 function DesignPreview({ html }: { html: string }) {
-  const iframeRef = useRef(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isStory, setIsStory] = useState(false);
 
   useEffect(() => {
@@ -85,9 +140,7 @@ function DesignPreview({ html }: { html: string }) {
 
   return (
     <div style={{ marginTop: "12px" }}>
-      <div style={{
-        display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center"
-      }}>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
         <span style={{ fontSize: "11px", color: "#9B7E5A", letterSpacing: "1px", textTransform: "uppercase" }}>
           {isStory ? "Story 9:16" : "Post 1:1"}
         </span>
@@ -109,8 +162,7 @@ function DesignPreview({ html }: { html: string }) {
         position: "relative",
         width: isStory ? "200px" : "300px",
         height: isStory ? "355px" : "300px",
-        borderRadius: "12px",
-        overflow: "hidden",
+        borderRadius: "12px", overflow: "hidden",
         boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
         border: "2px solid rgba(184,134,11,0.2)",
       }}>
@@ -120,8 +172,7 @@ function DesignPreview({ html }: { html: string }) {
           style={{
             width: isStory ? "540px" : "600px",
             height: isStory ? "960px" : "600px",
-            border: "none",
-            transformOrigin: "top left",
+            border: "none", transformOrigin: "top left",
             transform: isStory ? "scale(0.37)" : "scale(0.5)",
             pointerEvents: "none",
           }}
@@ -132,7 +183,7 @@ function DesignPreview({ html }: { html: string }) {
 }
 
 function Message({ msg }: { msg: { role: string; content: string } }) {
-  const parts = [];
+  const parts: { type: string; content: string }[] = [];
   if (msg.role === "assistant") {
     const regex = /```html-design\n([\s\S]*?)```/g;
     let lastIndex = 0;
@@ -149,7 +200,7 @@ function Message({ msg }: { msg: { role: string; content: string } }) {
     }
   }
 
-const fmt = (text: string) => text
+  const fmt = (text: string) => text
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.*?)\*/g, "<em>$1</em>")
     .replace(/\n/g, "<br/>");
@@ -188,10 +239,8 @@ const fmt = (text: string) => text
             }} dangerouslySetInnerHTML={{ __html: fmt(part.content.trim()) }} />
           ) : (
             <div key={i} style={{
-              padding: "16px",
-              background: "rgba(232,160,180,0.08)",
-              border: "1px solid rgba(184,134,11,0.15)",
-              borderRadius: "16px",
+              padding: "16px", background: "rgba(232,160,180,0.08)",
+              border: "1px solid rgba(184,134,11,0.15)", borderRadius: "16px",
             }}>
               <DesignPreview html={part.content} />
             </div>
@@ -213,24 +262,55 @@ const fmt = (text: string) => text
 export default function MatildeDesigner() {
   const [messages, setMessages] = useState([{
     role: "assistant",
-    content: "¡Hola! 🎨 Soy el diseñador de **Matilde Brunch**.\n\nEstoy completamente alineado con el manual de marca: colores pasteles, estilo retro glamuroso años 50-70, tipografía elegante, y esa energía latino-europea que define a Matilde.\n\nPídeme una pieza y la creo al instante — posts de Instagram, stories, anuncios, contenido de café, frases... ¿Qué diseñamos hoy?"
+    content: "¡Hola! 🎨 Soy el diseñador de **Matilde Brunch**.\n\nAhora puedo generar imágenes reales con IA y usar fotos que me subas. Pídeme una pieza o sube una foto de tus platos para empezar. ✨"
   }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-const bottomRef = useRef<HTMLDivElement>(null);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImageName, setUploadedImageName] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-const send = async (text?: string) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUploadedImage(reader.result as string);
+      setUploadedImageName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const send = async (text?: string) => {
     const userText = text || input.trim();
     if (!userText || loading) return;
     setInput("");
-    const newMsgs = [...messages, { role: "user", content: userText }];
+
+    const imageContext = uploadedImage
+      ? `\n\n[El usuario ha subido una foto llamada "${uploadedImageName}". Úsala como elemento principal del diseño con {{USER_IMAGE}}]`
+      : "";
+
+    const newMsgs = [
+      ...messages,
+      { role: "user", content: userText + (uploadedImage ? ` 📎 ${uploadedImageName}` : "") }
+    ];
     setMessages(newMsgs);
     setLoading(true);
+
     try {
+      const apiMessages = newMsgs.map((m, idx) => {
+        // inject image context into last user message for the API call
+        if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImage) {
+          return { role: m.role, content: userText + imageContext };
+        }
+        return { role: m.role, content: m.content };
+      });
+
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -238,12 +318,25 @@ const send = async (text?: string) => {
           model: "claude-sonnet-4-20250514",
           max_tokens: 4000,
           system: SYSTEM_PROMPT,
-          messages: newMsgs.map(m => ({ role: m.role, content: m.content })),
+          messages: apiMessages,
         }),
       });
+
       const data = await res.json();
-      const reply = data.content?.map((b: { text?: string }) => b.text || "").join("") || "Error al generar el diseño.";
+      let reply = data.content?.map((b: { text?: string }) => b.text || "").join("") || "Error al generar el diseño.";
+
+      // Process images in HTML blocks
+      const htmlRegex = /```html-design\n([\s\S]*?)```/g;
+      const htmlMatches = [...reply.matchAll(htmlRegex)];
+
+      for (const match of htmlMatches) {
+        const processedHtml = await processHtmlWithImages(match[1], uploadedImage);
+        reply = reply.replace(match[1], processedHtml);
+      }
+
       setMessages([...newMsgs, { role: "assistant", content: reply }]);
+      setUploadedImage(null);
+      setUploadedImageName(null);
     } catch {
       setMessages([...newMsgs, { role: "assistant", content: "Ocurrió un error. Intenta de nuevo." }]);
     } finally {
@@ -281,7 +374,7 @@ const send = async (text?: string) => {
             <div style={{ color: "rgba(184,134,11,0.5)", fontSize: "11px", letterSpacing: "2px", marginTop: "4px" }}>AGENTE DISEÑADOR IA</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            {["Posts", "Stories", "Eventos"].map((t, i) => (
+            {["Posts", "Stories", "Imágenes IA"].map((t, i) => (
               <div key={i} style={{
                 display: "inline-block", margin: "2px 4px",
                 background: "rgba(184,134,11,0.15)", borderRadius: "20px",
@@ -320,11 +413,11 @@ const send = async (text?: string) => {
                 display: "flex", gap: "5px", alignItems: "center",
               }}>
                 <span style={{ color: "#9B7E5A", fontSize: "13px", fontStyle: "italic", marginRight: "8px" }}>Diseñando...</span>
-                {[0,1,2].map(i => (
-                  <div key={i} style={{
+                {[0, 1, 2].map(j => (
+                  <div key={j} style={{
                     width: "7px", height: "7px", borderRadius: "50%",
                     background: "#E8A0B4",
-                    animation: `bounce 1.2s ease-in-out ${i*0.2}s infinite`,
+                    animation: `bounce 1.2s ease-in-out ${j * 0.2}s infinite`,
                   }} />
                 ))}
               </div>
@@ -343,25 +436,61 @@ const send = async (text?: string) => {
                 padding: "6px 14px", cursor: "pointer", fontFamily: "Georgia, serif",
                 transition: "all 0.2s",
               }}
-              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.2)"}
-onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.1)"}  
+                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.2)"}
+                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.1)"}
               >{e}</button>
             ))}
           </div>
         )}
 
+        {/* Uploaded image preview */}
+        {uploadedImage && (
+          <div style={{
+            background: "#FEFCF8", padding: "0 20px 10px",
+            display: "flex", alignItems: "center", gap: "10px",
+          }}>
+            <img src={uploadedImage} alt="uploaded" style={{
+              width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover",
+              border: "2px solid rgba(184,134,11,0.3)",
+            }} />
+            <span style={{ fontSize: "12px", color: "#9B7E5A" }}>📎 {uploadedImageName}</span>
+            <button onClick={() => { setUploadedImage(null); setUploadedImageName(null); }} style={{
+              background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: "16px",
+            }}>✕</button>
+          </div>
+        )}
+
         {/* Input */}
         <div style={{
-          background: "#F5EDD0",
-          padding: "14px 20px 20px",
+          background: "#F5EDD0", padding: "14px 20px 20px",
           borderTop: "1px solid rgba(184,134,11,0.12)",
           display: "flex", gap: "10px", alignItems: "flex-end",
         }}>
+          {/* Upload button */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            style={{ display: "none" }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Subir foto"
+            style={{
+              width: "46px", height: "46px", borderRadius: "14px", flexShrink: 0,
+              background: uploadedImage ? "rgba(184,134,11,0.3)" : "rgba(184,134,11,0.1)",
+              border: "1px solid rgba(184,134,11,0.3)",
+              color: "#8B6914", fontSize: "20px", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >📷</button>
+
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Pídeme una pieza: 'Post anunciando el fondue de chocolate' o 'Story con frase en francés'..."
+            placeholder="Pídeme una pieza o sube una foto de tu plato..."
             rows={2}
             style={{
               flex: 1, background: "#FFF",
@@ -369,16 +498,15 @@ onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "rg
               color: "#4A3520", fontSize: "14px", padding: "11px 16px",
               fontFamily: "Georgia, serif", resize: "none", outline: "none", lineHeight: "1.5",
             }}
-            onFocus={e => e.target.style.borderColor = "#B8860B"}
-            onBlur={e => e.target.style.borderColor = "rgba(184,134,11,0.25)"}
+            onFocus={e => e.currentTarget.style.borderColor = "#B8860B"}
+            onBlur={e => e.currentTarget.style.borderColor = "rgba(184,134,11,0.25)"}
           />
           <button onClick={() => send()} disabled={loading || !input.trim()} style={{
-            width: "46px", height: "46px", borderRadius: "14px",
+            width: "46px", height: "46px", borderRadius: "14px", flexShrink: 0,
             background: loading || !input.trim() ? "rgba(184,134,11,0.15)" : "linear-gradient(135deg, #1A1A1A, #2D2D2D)",
             border: "none", color: loading || !input.trim() ? "rgba(139,105,20,0.4)" : "#B8860B",
             fontSize: "18px", cursor: loading || !input.trim() ? "not-allowed" : "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "all 0.2s", flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s",
           }}>✦</button>
         </div>
       </div>
