@@ -105,16 +105,18 @@ async function generateGeminiImage(prompt: string): Promise<string | null> {
   }
 }
 
-async function processHtmlWithImages(html: string, userImage: string | null): Promise<string> {
-  if (userImage) {
-    html = html.replace(/\{\{USER_IMAGE\}\}/g, userImage);
-  }
+async function processHtmlWithImages(html: string, images: {data: string, name: string}[]): Promise<string> {
+  images.forEach((img, i) => {
+    html = html.replace(new RegExp(`\\{\\{USER_IMAGE_${i}\\}\\}`, 'g'), img.data);
+  });
+  // backward compat
+  if (images[0]) html = html.replace(/\{\{USER_IMAGE\}\}/g, images[0].data);
+
   const imgRegex = /\{\{GENERATE_IMAGE:\s*(.*?)\}\}/g;
   const matches = [...html.matchAll(imgRegex)];
   for (const match of matches) {
-    const prompt = match[1];
     const imageUrl = await generateGeminiImage(
-      `${prompt}, glamorous retro vintage style 50s 60s, pastel colors, high quality food photography, elegant`
+      `${match[1]}, NO TEXT, NO WORDS, purely visual decorative background`
     );
     html = html.replace(match[0], imageUrl || "");
   }
@@ -326,8 +328,7 @@ export default function MatildeDesigner() {
   }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [uploadedImageName, setUploadedImageName] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<{data: string, name: string}[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -336,15 +337,19 @@ export default function MatildeDesigner() {
   }, [messages, loading]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const files = Array.from(e.target.files || []);
+  files.forEach(file => {
     const reader = new FileReader();
     reader.onload = () => {
-      setUploadedImage(reader.result as string);
-      setUploadedImageName(file.name);
+      setUploadedImages(prev => [...prev, {
+        data: reader.result as string,
+        name: file.name
+      }]);
     };
     reader.readAsDataURL(file);
-  };
+  });
+  e.target.value = "";
+};
 
   const send = async (text?: string) => {
     const userText = text || input.trim();
@@ -363,25 +368,37 @@ export default function MatildeDesigner() {
     setLoading(true);
 
     try {
-      const apiMessages = newMsgs.map((m, idx) => {
-        if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImage) {
-          return {
-            role: m.role,
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: uploadedImage.split(";")[0].split(":")[1],
-                  data: uploadedImage.split(",")[1],
-                },
-              },
-              { type: "text", text: userText + imageContext },
-            ],
-          };
-        }
-        return { role: m.role, content: m.content };
-      });
+      const imageContext = uploadedImages.length > 0
+  ? `\n\n[El usuario ha subido ${uploadedImages.length} imagen(es): ${uploadedImages.map(i => i.name).join(", ")}. Úsalas en el diseño — la primera como elemento principal con {{USER_IMAGE_0}}, la segunda como referente con {{USER_IMAGE_1}}]`
+  : "";
+
+const newMsgs = [
+  ...messages,
+  { role: "user", content: userText + (uploadedImages.length > 0 ? ` 📎 ${uploadedImages.map(i => i.name).join(", ")}` : "") }
+];
+setMessages(newMsgs);
+setLoading(true);
+
+try {
+  const apiMessages = newMsgs.map((m, idx) => {
+    if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImages.length > 0) {
+      return {
+        role: m.role,
+        content: [
+          ...uploadedImages.map(img => ({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: img.data.split(";")[0].split(":")[1],
+              data: img.data.split(",")[1],
+            },
+          })),
+          { type: "text", text: userText + imageContext },
+        ],
+      };
+    }
+    return { role: m.role, content: m.content };
+  });
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -400,13 +417,12 @@ export default function MatildeDesigner() {
       const htmlRegex = /```html-design\n([\s\S]*?)```/g;
       const htmlMatches = [...reply.matchAll(htmlRegex)];
       for (const match of htmlMatches) {
-        const processedHtml = await processHtmlWithImages(match[1], uploadedImage);
+        const processedHtml = await processHtmlWithImages(match[1], uploadedImages);
         reply = reply.replace(match[1], processedHtml);
       }
 
       setMessages([...newMsgs, { role: "assistant", content: reply }]);
-      setUploadedImage(null);
-      setUploadedImageName(null);
+      setUploadedImages([]);
     } catch {
       setMessages([...newMsgs, { role: "assistant", content: "Ocurrió un error. Intenta de nuevo." }]);
     } finally {
@@ -507,28 +523,34 @@ export default function MatildeDesigner() {
           </div>
         )}
 
-        {uploadedImage && (
-          <div style={{
-            background: "#FEFCF8", padding: "0 20px 10px",
-            display: "flex", alignItems: "center", gap: "10px",
-          }}>
-            <img src={uploadedImage} alt="uploaded" style={{
-              width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover",
-              border: "2px solid rgba(184,134,11,0.3)",
-            }} />
-            <span style={{ fontSize: "12px", color: "#9B7E5A" }}>📎 {uploadedImageName}</span>
-            <button onClick={() => { setUploadedImage(null); setUploadedImageName(null); }} style={{
-              background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: "16px",
-            }}>✕</button>
-          </div>
-        )}
+        {uploadedImages.length > 0 && (
+  <div style={{
+    background: "#FEFCF8", padding: "0 20px 10px",
+    display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+  }}>
+    {uploadedImages.map((img, i) => (
+      <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <img src={img.data} alt="uploaded" style={{
+          width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover",
+          border: "2px solid rgba(184,134,11,0.3)",
+        }} />
+        <span style={{ fontSize: "11px", color: "#9B7E5A", maxWidth: "80px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {img.name}
+        </span>
+        <button onClick={() => setUploadedImages(prev => prev.filter((_, idx) => idx !== i))} style={{
+          background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: "14px",
+        }}>✕</button>
+      </div>
+    ))}
+  </div>
+)}
 
         <div style={{
           background: "#F5EDD0", padding: "14px 20px 20px",
           borderTop: "1px solid rgba(184,134,11,0.12)",
           display: "flex", gap: "10px", alignItems: "flex-end",
         }}>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} style={{ display: "none" }} />
+          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileUpload} style={{ display: "none" }} />
           <button onClick={() => fileInputRef.current?.click()} title="Subir foto" style={{
             width: "46px", height: "46px", borderRadius: "14px", flexShrink: 0,
             background: uploadedImage ? "rgba(184,134,11,0.3)" : "rgba(184,134,11,0.1)",
