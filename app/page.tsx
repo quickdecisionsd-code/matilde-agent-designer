@@ -131,8 +131,8 @@ function DesignPreview({ html }: { html: string }) {
     setIsStory(html.toLowerCase().includes("1920") || html.toLowerCase().includes("story"));
   }, [html]);
 
-  const downloadPng = async (ref: React.RefObject<HTMLIFrameElement>) => {
-    const iframe = ref.current;
+  const downloadPng = async (ref: React.RefObject<HTMLIFrameElement | null>) => {
+  const iframe = ref.current;
     if (!iframe || !iframe.contentDocument) return;
     const canvas = await html2canvas(iframe.contentDocument.body, {
       scale: 2, useCORS: true,
