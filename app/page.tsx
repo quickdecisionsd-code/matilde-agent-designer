@@ -75,7 +75,7 @@ const EXAMPLES = [
   "Post menú del día lunch time",
 ];
 
-function DesignPreview({ html }) {
+function DesignPreview({ html }: { html: string }) {
   const iframeRef = useRef(null);
   const [isStory, setIsStory] = useState(false);
 
@@ -131,7 +131,7 @@ function DesignPreview({ html }) {
   );
 }
 
-function Message({ msg }) {
+function Message({ msg }: { msg: { role: string; content: string } }) {
   const parts = [];
   if (msg.role === "assistant") {
     const regex = /```html-design\n([\s\S]*?)```/g;
@@ -149,7 +149,7 @@ function Message({ msg }) {
     }
   }
 
-  const fmt = (text) => text
+const fmt = (text: string) => text
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.*?)\*/g, "<em>$1</em>")
     .replace(/\n/g, "<br/>");
@@ -217,13 +217,13 @@ export default function MatildeDesigner() {
   }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef(null);
+const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const send = async (text) => {
+const send = async (text?: string) => {
     const userText = text || input.trim();
     if (!userText || loading) return;
     setInput("");
@@ -242,7 +242,7 @@ export default function MatildeDesigner() {
         }),
       });
       const data = await res.json();
-      const reply = data.content?.map(b => b.text || "").join("") || "Error al generar el diseño.";
+      const reply = data.content?.map((b: { text?: string }) => b.text || "").join("") || "Error al generar el diseño.";
       setMessages([...newMsgs, { role: "assistant", content: reply }]);
     } catch {
       setMessages([...newMsgs, { role: "assistant", content: "Ocurrió un error. Intenta de nuevo." }]);
@@ -343,8 +343,8 @@ export default function MatildeDesigner() {
                 padding: "6px 14px", cursor: "pointer", fontFamily: "Georgia, serif",
                 transition: "all 0.2s",
               }}
-                onMouseEnter={e => e.target.style.background = "rgba(232,160,180,0.2)"}
-                onMouseLeave={e => e.target.style.background = "rgba(232,160,180,0.1)"}
+              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.2)"}
+onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.1)"}  
               >{e}</button>
             ))}
           </div>
