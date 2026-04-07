@@ -106,28 +106,18 @@ async function generateGeminiImage(prompt: string): Promise<string | null> {
 }
 
 async function processHtmlWithImages(html: string, userImage: string | null): Promise<string> {
-  // Replace user image placeholder
   if (userImage) {
     html = html.replace(/\{\{USER_IMAGE\}\}/g, userImage);
   }
-
-  // Find and replace all GENERATE_IMAGE tags
   const imgRegex = /\{\{GENERATE_IMAGE:\s*(.*?)\}\}/g;
   const matches = [...html.matchAll(imgRegex)];
-
   for (const match of matches) {
     const prompt = match[1];
     const imageUrl = await generateGeminiImage(
       `${prompt}, glamorous retro vintage style 50s 60s, pastel colors, high quality food photography, elegant`
     );
-    if (imageUrl) {
-      html = html.replace(match[0], imageUrl);
-    } else {
-      // fallback to gradient if image generation fails
-      html = html.replace(match[0], "");
-    }
+    html = html.replace(match[0], imageUrl || "");
   }
-
   return html;
 }
 
@@ -156,7 +146,6 @@ function DesignPreview({ html }: { html: string }) {
 
   return (
     <>
-      {/* Thumbnail */}
       <div style={{ marginTop: "12px" }}>
         <div style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
           <span style={{ fontSize: "11px", color: "#9B7E5A", letterSpacing: "1px", textTransform: "uppercase" }}>
@@ -185,32 +174,25 @@ function DesignPreview({ html }: { html: string }) {
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
             background: "rgba(0,0,0,0)", transition: "background 0.2s",
           }}
-            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0.15)"}
+            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0.2)"}
             onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0)"}
           >
-            <span style={{ color: "#FFF", fontSize: "24px", opacity: 0 }}
-              onMouseEnter={e => (e.currentTarget as HTMLSpanElement).style.opacity = "1"}
-              onMouseLeave={e => (e.currentTarget as HTMLSpanElement).style.opacity = "0"}
-            >🔍</span>
+            <span style={{ color: "#FFF", fontSize: "28px" }}>🔍</span>
           </div>
         </div>
       </div>
 
-      {/* Modal */}
       {showModal && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 1000,
           background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "20px",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: "20px",
         }} onClick={() => setShowModal(false)}>
           <div style={{
             background: "#1A1A1A", borderRadius: "20px", overflow: "hidden",
             boxShadow: "0 30px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(184,134,11,0.2)",
             display: "flex", flexDirection: "column", maxHeight: "95vh",
           }} onClick={e => e.stopPropagation()}>
-
-            {/* Modal header */}
             <div style={{
               padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center",
               borderBottom: "1px solid rgba(184,134,11,0.2)",
@@ -222,7 +204,7 @@ function DesignPreview({ html }: { html: string }) {
                 <button onClick={() => downloadPng(previewRef)} style={{
                   background: "linear-gradient(135deg, #B8860B, #A0720A)", border: "none",
                   borderRadius: "20px", color: "#FFF8E7", fontSize: "12px",
-                  padding: "6px 16px", cursor: "pointer", letterSpacing: "0.5px",
+                  padding: "6px 16px", cursor: "pointer",
                 }}>⬇ Descargar PNG</button>
                 <button onClick={() => setShowModal(false)} style={{
                   background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)",
@@ -231,8 +213,6 @@ function DesignPreview({ html }: { html: string }) {
                 }}>✕ Cerrar</button>
               </div>
             </div>
-
-            {/* Modal preview */}
             <div style={{
               overflow: "auto", padding: "24px",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -247,7 +227,7 @@ function DesignPreview({ html }: { html: string }) {
                 flexShrink: 0,
               }}>
                 <iframe ref={previewRef} srcDoc={html} style={{
-                  width: isStory ? "1080px" : "1080px",
+                  width: "1080px",
                   height: isStory ? "1920px" : "1080px",
                   border: "none", transformOrigin: "top left",
                   transform: isStory ? "scale(0.296)" : "scale(0.463)",
@@ -259,36 +239,6 @@ function DesignPreview({ html }: { html: string }) {
         </div>
       )}
     </>
-  );
-}
-          style={{
-            background: "rgba(184,134,11,0.12)", border: "1px solid rgba(184,134,11,0.3)",
-            borderRadius: "20px", color: "#8B6914", fontSize: "11px", padding: "3px 12px",
-            cursor: "pointer", letterSpacing: "0.5px",
-          }}
-        >⬇ Descargar Imagen</button>
-      </div>
-      <div style={{
-        position: "relative",
-        width: isStory ? "200px" : "300px",
-        height: isStory ? "355px" : "300px",
-        borderRadius: "12px", overflow: "hidden",
-        boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
-        border: "2px solid rgba(184,134,11,0.2)",
-      }}>
-        <iframe
-          ref={iframeRef}
-          srcDoc={html}
-          style={{
-            width: isStory ? "540px" : "600px",
-            height: isStory ? "960px" : "600px",
-            border: "none", transformOrigin: "top left",
-            transform: isStory ? "scale(0.37)" : "scale(0.5)",
-            pointerEvents: "none",
-          }}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -413,28 +363,25 @@ export default function MatildeDesigner() {
     setLoading(true);
 
     try {
-     const apiMessages = newMsgs.map((m, idx) => {
-  if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImage) {
-    return {
-      role: m.role,
-      content: [
-        {
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: uploadedImage.split(";")[0].split(":")[1],
-            data: uploadedImage.split(",")[1],
-          },
-        },
-        {
-          type: "text",
-          text: userText + imageContext,
-        },
-      ],
-    };
-  }
-  return { role: m.role, content: m.content };
-});
+      const apiMessages = newMsgs.map((m, idx) => {
+        if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImage) {
+          return {
+            role: m.role,
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: uploadedImage.split(";")[0].split(":")[1],
+                  data: uploadedImage.split(",")[1],
+                },
+              },
+              { type: "text", text: userText + imageContext },
+            ],
+          };
+        }
+        return { role: m.role, content: m.content };
+      });
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -450,10 +397,8 @@ export default function MatildeDesigner() {
       const data = await res.json();
       let reply = data.content?.map((b: { text?: string }) => b.text || "").join("") || "Error al generar el diseño.";
 
-      // Process images in HTML blocks
       const htmlRegex = /```html-design\n([\s\S]*?)```/g;
       const htmlMatches = [...reply.matchAll(htmlRegex)];
-
       for (const match of htmlMatches) {
         const processedHtml = await processHtmlWithImages(match[1], uploadedImage);
         reply = reply.replace(match[1], processedHtml);
@@ -483,8 +428,6 @@ export default function MatildeDesigner() {
         boxShadow: "0 20px 60px rgba(180,100,120,0.15), 0 0 0 1px rgba(184,134,11,0.12)",
         display: "flex", flexDirection: "column",
       }}>
-
-        {/* Header */}
         <div style={{
           background: "linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%)",
           padding: "28px 32px",
@@ -509,14 +452,12 @@ export default function MatildeDesigner() {
           </div>
         </div>
 
-        {/* Color strip */}
         <div style={{ display: "flex", height: "4px" }}>
           {["#E8A0B4", "#A8C5A0", "#F5EDD0", "#E8622A", "#B8860B", "#1C4A3E"].map((c, i) => (
             <div key={i} style={{ flex: 1, background: c }} />
           ))}
         </div>
 
-        {/* Messages */}
         <div style={{
           background: "#FEFCF8", overflowY: "auto",
           padding: "24px", minHeight: "420px", maxHeight: "500px",
@@ -551,15 +492,13 @@ export default function MatildeDesigner() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Examples */}
         {messages.length <= 1 && (
           <div style={{ background: "#FEFCF8", padding: "0 20px 14px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
             {EXAMPLES.map((e, i) => (
               <button key={i} onClick={() => send(e)} style={{
                 background: "rgba(232,160,180,0.1)", border: "1px solid rgba(232,160,180,0.35)",
                 borderRadius: "20px", color: "#9B5C6E", fontSize: "12px",
-                padding: "6px 14px", cursor: "pointer", fontFamily: "Georgia, serif",
-                transition: "all 0.2s",
+                padding: "6px 14px", cursor: "pointer", fontFamily: "Georgia, serif", transition: "all 0.2s",
               }}
                 onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.2)"}
                 onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(232,160,180,0.1)"}
@@ -568,7 +507,6 @@ export default function MatildeDesigner() {
           </div>
         )}
 
-        {/* Uploaded image preview */}
         {uploadedImage && (
           <div style={{
             background: "#FEFCF8", padding: "0 20px 10px",
@@ -585,31 +523,19 @@ export default function MatildeDesigner() {
           </div>
         )}
 
-        {/* Input */}
         <div style={{
           background: "#F5EDD0", padding: "14px 20px 20px",
           borderTop: "1px solid rgba(184,134,11,0.12)",
           display: "flex", gap: "10px", alignItems: "flex-end",
         }}>
-          {/* Upload button */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            style={{ display: "none" }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="Subir foto"
-            style={{
-              width: "46px", height: "46px", borderRadius: "14px", flexShrink: 0,
-              background: uploadedImage ? "rgba(184,134,11,0.3)" : "rgba(184,134,11,0.1)",
-              border: "1px solid rgba(184,134,11,0.3)",
-              color: "#8B6914", fontSize: "20px", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >📷</button>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} style={{ display: "none" }} />
+          <button onClick={() => fileInputRef.current?.click()} title="Subir foto" style={{
+            width: "46px", height: "46px", borderRadius: "14px", flexShrink: 0,
+            background: uploadedImage ? "rgba(184,134,11,0.3)" : "rgba(184,134,11,0.1)",
+            border: "1px solid rgba(184,134,11,0.3)",
+            color: "#8B6914", fontSize: "20px", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>📷</button>
 
           <textarea
             value={input}
