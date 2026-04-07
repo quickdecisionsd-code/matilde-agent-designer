@@ -303,13 +303,28 @@ export default function MatildeDesigner() {
     setLoading(true);
 
     try {
-      const apiMessages = newMsgs.map((m, idx) => {
-        // inject image context into last user message for the API call
-        if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImage) {
-          return { role: m.role, content: userText + imageContext };
-        }
-        return { role: m.role, content: m.content };
-      });
+     const apiMessages = newMsgs.map((m, idx) => {
+  if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImage) {
+    return {
+      role: m.role,
+      content: [
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: uploadedImage.split(";")[0].split(":")[1],
+            data: uploadedImage.split(",")[1],
+          },
+        },
+        {
+          type: "text",
+          text: userText + imageContext,
+        },
+      ],
+    };
+  }
+  return { role: m.role, content: m.content };
+});
 
       const res = await fetch("/api/chat", {
         method: "POST",
