@@ -4,6 +4,14 @@ import html2canvas from "html2canvas";
 
 const SYSTEM_PROMPT = `Eres el diseñador oficial de Matilde Brunch, un restaurante brunch en Medellín con inspiración latino-europea (principalmente francesa e italiana). Tu trabajo es generar piezas de diseño en HTML/CSS para posts de Instagram (1080x1080px) y stories (1080x1920px).
 
+=== EQUIPO FUNDADOR ===
+Matilde Brunch fue creado por:
+- Jerónimo Vásquez
+- Santiago Londoño
+- Daniela Restrepo
+
+Si alguien pregunta por los dueños, fundadores o creadores de Matilde, responde con esta información.
+
 === IDENTIDAD DE MARCA MATILDE BRUNCH ===
 
 ESLOGAN: "La magia está por dentro"
@@ -34,6 +42,7 @@ ESTILO VISUAL:
 - Mezcla entre: collage, fotografía de producto, post de solo texto, fotografía intervenida
 - Inspiración cultural: francesa, italiana, europea con raíces latinas
 - Lenguaje que evoque culturas del mundo: "bonjour madame", "c'est la vie", "ciao bella", "très chic"
+- Todo el texto en el diseño siempre en español
 
 FORMATOS:
 - Post Instagram: 1080x1080px (cuadrado)
@@ -42,8 +51,16 @@ FORMATOS:
 LOGO: El logo de Matilde usa letras espaciadas en dorado/negro con "Brunch" en cursiva script debajo. Simúlalo con tipografía cuando lo necesites.
 
 === IMÁGENES ===
-Cuando el usuario suba una foto, úsala en el diseño como fondo o elemento principal. Referencia la imagen con la etiqueta especial: {{USER_IMAGE}}
-Cuando quieras incluir una imagen generada por IA, describe lo que quieres con la etiqueta: {{GENERATE_IMAGE: descripción detallada en inglés, estilo retro vintage glamoroso, colores pasteles, food photography}}
+Cuando el usuario suba fotos, úsalas en el diseño:
+- Primera imagen: {{USER_IMAGE_0}} (elemento principal)
+- Segunda imagen: {{USER_IMAGE_1}} (referente o elemento secundario)
+- También puedes usar {{USER_IMAGE}} para la primera imagen
+
+Cuando quieras incluir una imagen generada por IA, úsala SOLO como fondo visual o elemento decorativo.
+Usa la etiqueta: {{GENERATE_IMAGE: descripción en inglés, NO TEXT, NO WORDS, purely visual background}}
+
+IMPORTANTE: NUNCA pongas texto dentro del prompt de imagen generada. Todo el texto del diseño
+(títulos, frases, precios, nombres de platos) debe ir en HTML/CSS, siempre en español.
 
 === TU COMPORTAMIENTO ===
 
@@ -54,8 +71,8 @@ Cuando el usuario pida una pieza de diseño:
 4. Usa @import de Google Fonts al inicio del <style>
 5. El diseño debe ser pixel-perfect para el formato solicitado
 6. Siempre incluye el logo/nombre "Matilde Brunch" en la pieza
-7. Si el usuario subió una foto, úsala como elemento central del diseño con {{USER_IMAGE}}
-8. Si quieres generar una imagen de fondo o decorativa, usa {{GENERATE_IMAGE: prompt en inglés}}
+7. Si el usuario subió fotos, úsalas como elementos del diseño
+8. Todo el texto siempre en español
 
 TIPOS DE PIEZAS QUE PUEDES CREAR:
 - Anuncio de nuevo plato
@@ -82,6 +99,11 @@ const EXAMPLES = [
   "Post menú del día lunch time",
 ];
 
+interface UploadedImage {
+  data: string;
+  name: string;
+}
+
 async function generateGeminiImage(prompt: string): Promise<string | null> {
   try {
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
@@ -105,18 +127,18 @@ async function generateGeminiImage(prompt: string): Promise<string | null> {
   }
 }
 
-async function processHtmlWithImages(html: string, images: {data: string, name: string}[]): Promise<string> {
+async function processHtmlWithImages(html: string, images: UploadedImage[]): Promise<string> {
   images.forEach((img, i) => {
-    html = html.replace(new RegExp(`\\{\\{USER_IMAGE_${i}\\}\\}`, 'g'), img.data);
+    html = html.replace(new RegExp(`\\{\\{USER_IMAGE_${i}\\}\\}`, "g"), img.data);
   });
-  // backward compat
-  if (images[0]) html = html.replace(/\{\{USER_IMAGE\}\}/g, images[0].data);
-
+  if (images[0]) {
+    html = html.replace(/\{\{USER_IMAGE\}\}/g, images[0].data);
+  }
   const imgRegex = /\{\{GENERATE_IMAGE:\s*(.*?)\}\}/g;
   const matches = [...html.matchAll(imgRegex)];
   for (const match of matches) {
     const imageUrl = await generateGeminiImage(
-      `${match[1]}, NO TEXT, NO WORDS, purely visual decorative background`
+      `${match[1]}, NO TEXT, NO WORDS, NO LETTERS, purely visual decorative background`
     );
     html = html.replace(match[0], imageUrl || "");
   }
@@ -134,11 +156,13 @@ function DesignPreview({ html }: { html: string }) {
   }, [html]);
 
   const downloadPng = async (ref: React.RefObject<HTMLIFrameElement | null>) => {
-  const iframe = ref.current;
+    const iframe = ref.current;
     if (!iframe || !iframe.contentDocument) return;
     const canvas = await html2canvas(iframe.contentDocument.body, {
-      scale: 2, useCORS: true,
-      width: 1080, height: isStory ? 1920 : 1080,
+      scale: 2,
+      useCORS: true,
+      width: 1080,
+      height: isStory ? 1920 : 1080,
     });
     const a = document.createElement("a");
     a.download = "matilde-design.png";
@@ -324,11 +348,11 @@ function Message({ msg }: { msg: { role: string; content: string } }) {
 export default function MatildeDesigner() {
   const [messages, setMessages] = useState([{
     role: "assistant",
-    content: "¡Hola! 🎨 Soy el diseñador de **Matilde Brunch**.\n\nAhora puedo generar imágenes reales con IA y usar fotos que me subas. Pídeme una pieza o sube una foto de tus platos para empezar. ✨"
+    content: "¡Hola! 🎨 Soy el diseñador de **Matilde Brunch**.\n\nAhora puedo generar imágenes reales con IA y usar fotos que me subas. Puedes subir varias fotos a la vez — una como elemento principal y otra como referente. ✨"
   }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<{data: string, name: string}[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -337,68 +361,53 @@ export default function MatildeDesigner() {
   }, [messages, loading]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const files = Array.from(e.target.files || []);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      setUploadedImages(prev => [...prev, {
-        data: reader.result as string,
-        name: file.name
-      }]);
-    };
-    reader.readAsDataURL(file);
-  });
-  e.target.value = "";
-};
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setUploadedImages(prev => [...prev, { data: reader.result as string, name: file.name }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  };
 
   const send = async (text?: string) => {
     const userText = text || input.trim();
     if (!userText || loading) return;
     setInput("");
 
-    const imageContext = uploadedImage
-      ? `\n\n[El usuario ha subido una foto llamada "${uploadedImageName}". Úsala como elemento principal del diseño con {{USER_IMAGE}}]`
+    const imageContext = uploadedImages.length > 0
+      ? `\n\n[El usuario ha subido ${uploadedImages.length} imagen(es): ${uploadedImages.map(i => i.name).join(", ")}. Úsalas en el diseño — la primera como elemento principal con {{USER_IMAGE_0}}${uploadedImages.length > 1 ? ", la segunda como referente con {{USER_IMAGE_1}}" : ""}]`
       : "";
 
     const newMsgs = [
       ...messages,
-      { role: "user", content: userText + (uploadedImage ? ` 📎 ${uploadedImageName}` : "") }
+      { role: "user", content: userText + (uploadedImages.length > 0 ? ` 📎 ${uploadedImages.map(i => i.name).join(", ")}` : "") }
     ];
     setMessages(newMsgs);
     setLoading(true);
 
     try {
-      const imageContext = uploadedImages.length > 0
-  ? `\n\n[El usuario ha subido ${uploadedImages.length} imagen(es): ${uploadedImages.map(i => i.name).join(", ")}. Úsalas en el diseño — la primera como elemento principal con {{USER_IMAGE_0}}, la segunda como referente con {{USER_IMAGE_1}}]`
-  : "";
-
-const newMsgs = [
-  ...messages,
-  { role: "user", content: userText + (uploadedImages.length > 0 ? ` 📎 ${uploadedImages.map(i => i.name).join(", ")}` : "") }
-];
-setMessages(newMsgs);
-setLoading(true);
-
-try {
-  const apiMessages = newMsgs.map((m, idx) => {
-    if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImages.length > 0) {
-      return {
-        role: m.role,
-        content: [
-          ...uploadedImages.map(img => ({
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: img.data.split(";")[0].split(":")[1],
-              data: img.data.split(",")[1],
-            },
-          })),
-          { type: "text", text: userText + imageContext },
-        ],
-      };
-    }
-    return { role: m.role, content: m.content };
-  });
+      const apiMessages = newMsgs.map((m, idx) => {
+        if (idx === newMsgs.length - 1 && m.role === "user" && uploadedImages.length > 0) {
+          return {
+            role: m.role,
+            content: [
+              ...uploadedImages.map(img => ({
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: img.data.split(";")[0].split(":")[1],
+                  data: img.data.split(",")[1],
+                },
+              })),
+              { type: "text", text: userText + imageContext },
+            ],
+          };
+        }
+        return { role: m.role, content: m.content };
+      });
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -524,26 +533,29 @@ try {
         )}
 
         {uploadedImages.length > 0 && (
-  <div style={{
-    background: "#FEFCF8", padding: "0 20px 10px",
-    display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
-  }}>
-    {uploadedImages.map((img, i) => (
-      <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-        <img src={img.data} alt="uploaded" style={{
-          width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover",
-          border: "2px solid rgba(184,134,11,0.3)",
-        }} />
-        <span style={{ fontSize: "11px", color: "#9B7E5A", maxWidth: "80px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {img.name}
-        </span>
-        <button onClick={() => setUploadedImages(prev => prev.filter((_, idx) => idx !== i))} style={{
-          background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: "14px",
-        }}>✕</button>
-      </div>
-    ))}
-  </div>
-)}
+          <div style={{
+            background: "#FEFCF8", padding: "0 20px 10px",
+            display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+          }}>
+            {uploadedImages.map((img, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                background: "rgba(184,134,11,0.08)", borderRadius: "10px", padding: "4px 8px",
+              }}>
+                <img src={img.data} alt="uploaded" style={{
+                  width: "40px", height: "40px", borderRadius: "6px", objectFit: "cover",
+                  border: "1px solid rgba(184,134,11,0.3)",
+                }} />
+                <span style={{ fontSize: "11px", color: "#9B7E5A" }}>
+                  {i === 0 ? "🖼️ Principal" : "📌 Referente"}
+                </span>
+                <button onClick={() => setUploadedImages(prev => prev.filter((_, idx) => idx !== i))} style={{
+                  background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: "14px", padding: "0",
+                }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{
           background: "#F5EDD0", padding: "14px 20px 20px",
@@ -551,9 +563,9 @@ try {
           display: "flex", gap: "10px", alignItems: "flex-end",
         }}>
           <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileUpload} style={{ display: "none" }} />
-          <button onClick={() => fileInputRef.current?.click()} title="Subir foto" style={{
+          <button onClick={() => fileInputRef.current?.click()} title="Subir fotos" style={{
             width: "46px", height: "46px", borderRadius: "14px", flexShrink: 0,
-            background: uploadedImage ? "rgba(184,134,11,0.3)" : "rgba(184,134,11,0.1)",
+            background: uploadedImages.length > 0 ? "rgba(184,134,11,0.3)" : "rgba(184,134,11,0.1)",
             border: "1px solid rgba(184,134,11,0.3)",
             color: "#8B6914", fontSize: "20px", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -563,7 +575,7 @@ try {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Pídeme una pieza o sube una foto de tu plato..."
+            placeholder="Pídeme una pieza o sube fotos de tus platos..."
             rows={2}
             style={{
               flex: 1, background: "#FFF",
