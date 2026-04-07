@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import html2canvas from "html2canvas";
 
 const SYSTEM_PROMPT = `Eres el diseñador oficial de Matilde Brunch, un restaurante brunch en Medellín con inspiración latino-europea (principalmente francesa e italiana). Tu trabajo es generar piezas de diseño en HTML/CSS para posts de Instagram (1080x1080px) y stories (1080x1920px).
 
@@ -145,18 +146,26 @@ function DesignPreview({ html }: { html: string }) {
           {isStory ? "Story 9:16" : "Post 1:1"}
         </span>
         <button
-          onClick={() => {
-            const blob = new Blob([html], { type: "text/html" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url; a.download = "matilde-design.html"; a.click();
-          }}
+          onClick={async () => {
+  const iframe = iframeRef.current;
+  if (!iframe || !iframe.contentDocument) return;
+  const canvas = await html2canvas(iframe.contentDocument.body, {
+    scale: 2,
+    useCORS: true,
+    width: isStory ? 1080 : 1080,
+    height: isStory ? 1920 : 1080,
+  });
+  const a = document.createElement("a");
+  a.download = "matilde-design.png";
+  a.href = canvas.toDataURL("image/png");
+  a.click();
+}}
           style={{
             background: "rgba(184,134,11,0.12)", border: "1px solid rgba(184,134,11,0.3)",
             borderRadius: "20px", color: "#8B6914", fontSize: "11px", padding: "3px 12px",
             cursor: "pointer", letterSpacing: "0.5px",
           }}
-        >⬇ Descargar HTML</button>
+        >⬇ Descargar Imagen</button>
       </div>
       <div style={{
         position: "relative",
