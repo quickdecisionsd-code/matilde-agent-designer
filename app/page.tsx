@@ -133,33 +133,134 @@ async function processHtmlWithImages(html: string, userImage: string | null): Pr
 
 function DesignPreview({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const previewRef = useRef<HTMLIFrameElement>(null);
   const [isStory, setIsStory] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     setIsStory(html.toLowerCase().includes("1920") || html.toLowerCase().includes("story"));
   }, [html]);
 
+  const downloadPng = async (ref: React.RefObject<HTMLIFrameElement>) => {
+    const iframe = ref.current;
+    if (!iframe || !iframe.contentDocument) return;
+    const canvas = await html2canvas(iframe.contentDocument.body, {
+      scale: 2, useCORS: true,
+      width: 1080, height: isStory ? 1920 : 1080,
+    });
+    const a = document.createElement("a");
+    a.download = "matilde-design.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  };
+
   return (
-    <div style={{ marginTop: "12px" }}>
-      <div style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
-        <span style={{ fontSize: "11px", color: "#9B7E5A", letterSpacing: "1px", textTransform: "uppercase" }}>
-          {isStory ? "Story 9:16" : "Post 1:1"}
-        </span>
-        <button
-          onClick={async () => {
-  const iframe = iframeRef.current;
-  if (!iframe || !iframe.contentDocument) return;
-  const canvas = await html2canvas(iframe.contentDocument.body, {
-    scale: 2,
-    useCORS: true,
-    width: isStory ? 1080 : 1080,
-    height: isStory ? 1920 : 1080,
-  });
-  const a = document.createElement("a");
-  a.download = "matilde-design.png";
-  a.href = canvas.toDataURL("image/png");
-  a.click();
-}}
+    <>
+      {/* Thumbnail */}
+      <div style={{ marginTop: "12px" }}>
+        <div style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
+          <span style={{ fontSize: "11px", color: "#9B7E5A", letterSpacing: "1px", textTransform: "uppercase" }}>
+            {isStory ? "Story 9:16" : "Post 1:1"}
+          </span>
+          <button onClick={() => setShowModal(true)} style={{
+            background: "rgba(184,134,11,0.12)", border: "1px solid rgba(184,134,11,0.3)",
+            borderRadius: "20px", color: "#8B6914", fontSize: "11px", padding: "3px 12px", cursor: "pointer",
+          }}>🔍 Previsualizar</button>
+          <button onClick={() => downloadPng(iframeRef)} style={{
+            background: "rgba(184,134,11,0.12)", border: "1px solid rgba(184,134,11,0.3)",
+            borderRadius: "20px", color: "#8B6914", fontSize: "11px", padding: "3px 12px", cursor: "pointer",
+          }}>⬇ Descargar PNG</button>
+        </div>
+        <div style={{
+          position: "relative", width: isStory ? "200px" : "300px", height: isStory ? "355px" : "300px",
+          borderRadius: "12px", overflow: "hidden", boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+          border: "2px solid rgba(184,134,11,0.2)", cursor: "pointer",
+        }} onClick={() => setShowModal(true)}>
+          <iframe ref={iframeRef} srcDoc={html} style={{
+            width: isStory ? "540px" : "600px", height: isStory ? "960px" : "600px",
+            border: "none", transformOrigin: "top left",
+            transform: isStory ? "scale(0.37)" : "scale(0.5)", pointerEvents: "none",
+          }} />
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(0,0,0,0)", transition: "background 0.2s",
+          }}
+            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0.15)"}
+            onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0)"}
+          >
+            <span style={{ color: "#FFF", fontSize: "24px", opacity: 0 }}
+              onMouseEnter={e => (e.currentTarget as HTMLSpanElement).style.opacity = "1"}
+              onMouseLeave={e => (e.currentTarget as HTMLSpanElement).style.opacity = "0"}
+            >🔍</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "20px",
+        }} onClick={() => setShowModal(false)}>
+          <div style={{
+            background: "#1A1A1A", borderRadius: "20px", overflow: "hidden",
+            boxShadow: "0 30px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(184,134,11,0.2)",
+            display: "flex", flexDirection: "column", maxHeight: "95vh",
+          }} onClick={e => e.stopPropagation()}>
+
+            {/* Modal header */}
+            <div style={{
+              padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center",
+              borderBottom: "1px solid rgba(184,134,11,0.2)",
+            }}>
+              <span style={{ color: "#B8860B", fontSize: "13px", letterSpacing: "2px", textTransform: "uppercase" }}>
+                {isStory ? "Story 9:16" : "Post 1:1"} — Previsualización
+              </span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={() => downloadPng(previewRef)} style={{
+                  background: "linear-gradient(135deg, #B8860B, #A0720A)", border: "none",
+                  borderRadius: "20px", color: "#FFF8E7", fontSize: "12px",
+                  padding: "6px 16px", cursor: "pointer", letterSpacing: "0.5px",
+                }}>⬇ Descargar PNG</button>
+                <button onClick={() => setShowModal(false)} style={{
+                  background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "20px", color: "#FFF", fontSize: "12px",
+                  padding: "6px 14px", cursor: "pointer",
+                }}>✕ Cerrar</button>
+              </div>
+            </div>
+
+            {/* Modal preview */}
+            <div style={{
+              overflow: "auto", padding: "24px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <div style={{
+                position: "relative",
+                width: isStory ? "320px" : "500px",
+                height: isStory ? "568px" : "500px",
+                borderRadius: "12px", overflow: "hidden",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
+                border: "2px solid rgba(184,134,11,0.3)",
+                flexShrink: 0,
+              }}>
+                <iframe ref={previewRef} srcDoc={html} style={{
+                  width: isStory ? "1080px" : "1080px",
+                  height: isStory ? "1920px" : "1080px",
+                  border: "none", transformOrigin: "top left",
+                  transform: isStory ? "scale(0.296)" : "scale(0.463)",
+                  pointerEvents: "none",
+                }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
           style={{
             background: "rgba(184,134,11,0.12)", border: "1px solid rgba(184,134,11,0.3)",
             borderRadius: "20px", color: "#8B6914", fontSize: "11px", padding: "3px 12px",
