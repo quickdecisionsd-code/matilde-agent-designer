@@ -95,7 +95,7 @@ Si no da texto específico, inventa uno alineado a la marca.
 Siempre diseña con intención artística: composición, jerarquía, atmósfera.
 
 Responde siempre en español.`;
-
+ 
 const EXAMPLES = [
   "Post anunciando los Toffee Pancakes",
   "Story con frase inspiracional francesa",
